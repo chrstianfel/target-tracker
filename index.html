@@ -140,6 +140,64 @@
     letter-spacing:0.08em;
     margin-top:3px;
   }
+  .countdown .days-sub{
+    font-size:9.5px;
+    color:var(--text-dim);
+    margin-top:2px;
+  }
+
+  /* ---------- Filter bar ---------- */
+  .filter-bar{
+    padding:0 16px 10px;
+  }
+  .cat-chips{
+    display:flex; gap:8px;
+    overflow-x:auto;
+    padding-bottom:8px;
+    scrollbar-width:none;
+  }
+  .cat-chips::-webkit-scrollbar{display:none;}
+  .chip{
+    flex:0 0 auto;
+    background:var(--bg-elev2);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    padding:7px 13px;
+    border-radius:99px;
+    font-size:12.5px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .chip.active{
+    background:var(--text); color:#FFFFFF; border-color:var(--text);
+  }
+  .filter-controls{
+    display:flex; gap:8px; align-items:center;
+  }
+  .filter-controls select{
+    flex:1;
+    background:var(--bg-elev2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:9px 10px;
+    border-radius:10px;
+    font-size:12.5px;
+    font-family:var(--font-body);
+  }
+  .archive-btn{
+    flex:0 0 auto;
+    background:var(--bg-elev2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:9px 13px;
+    border-radius:10px;
+    font-size:12.5px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .archive-btn.active{
+    background:var(--text); color:#FFFFFF; border-color:var(--text);
+  }
 
   .progress-wrap{margin-top:14px;}
   .progress-track{
@@ -310,6 +368,17 @@
 
 <div id="notifBanner"></div>
 
+<div class="filter-bar">
+  <div class="filter-controls">
+    <select id="sortSelect">
+      <option value="nearest">Sisa waktu terdekat</option>
+      <option value="newest">Tanggal terbaru ditambahkan</option>
+      <option value="oldest">Tanggal terlama ditambahkan</option>
+    </select>
+    <button class="archive-btn" id="archiveToggleBtn">Archive</button>
+  </div>
+</div>
+
 <main>
   <div id="list"></div>
 </main>
@@ -330,9 +399,9 @@
       <select id="f_cat">
         <option value="Karier">Karier</option>
         <option value="Keuangan">Keuangan</option>
-        <option value="Kesehatan">Kesehatan</option>
         <option value="Belajar">Belajar</option>
         <option value="Personal">Personal</option>
+        <option value="Travelling">Travelling</option>
         <option value="Lainnya">Lainnya</option>
       </select>
     </div>
@@ -401,6 +470,16 @@ function fmtDate(iso){
 }
 function uid(){ return 't_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
 
+const CATEGORIES = ['Karier','Keuangan','Belajar','Personal','Travelling','Lainnya'];
+
+function formatMonthsHint(daysLeft){
+  if(daysLeft < 30) return null;
+  const months = Math.floor(daysLeft/30);
+  const remDays = daysLeft % 30;
+  if(months < 1) return null;
+  return remDays > 0 ? `≈${months} bln ${remDays} hr lagi` : `≈${months} bln lagi`;
+}
+
 function computeProgress(item){
   if(item.mode === 'manual'){
     return Math.max(0, Math.min(100, item.manualProgress||0));
@@ -427,37 +506,81 @@ function progressColor(pct, daysLeft){
 const listEl = document.getElementById('list');
 const summaryRow = document.getElementById('summaryRow');
 const todayLabel = document.getElementById('todayLabel');
+const sortSelect = document.getElementById('sortSelect');
+const archiveToggleBtn = document.getElementById('archiveToggleBtn');
 
 todayLabel.textContent = new Date().toLocaleDateString('id-ID', {weekday:'long', day:'numeric', month:'long'});
 
+let currentSort = 'nearest';
+let viewArchive = false;
+
+sortSelect.addEventListener('change', () => {
+  currentSort = sortSelect.value;
+  render();
+});
+archiveToggleBtn.addEventListener('click', () => {
+  viewArchive = !viewArchive;
+  render();
+});
+
 function render(){
-  items.sort((a,b) => new Date(a.target) - new Date(b.target));
   saveItems(items);
 
-  // summary
+  // summary (selalu hitung dari semua item, terlepas dari filter/tampilan)
   const active = items.filter(i => !i.completed);
   const reached = items.filter(i => {
     const d = daysBetween(todayStr(), new Date(i.target+'T00:00:00'));
     return d <= 0 && !i.completed;
   });
-  const done = items.filter(i => i.completed);
+  const archived = items.filter(i => i.completed);
   summaryRow.innerHTML = `
     <div class="stat-pill"><div class="num">${active.length}</div><div class="lbl">Aktif</div></div>
     <div class="stat-pill"><div class="num">${reached.length}</div><div class="lbl">Tercapai H</div></div>
-    <div class="stat-pill"><div class="num">${done.length}</div><div class="lbl">Selesai</div></div>
+    <div class="stat-pill"><div class="num">${archived.length}</div><div class="lbl">Diarsipkan</div></div>
   `;
 
-  if(items.length === 0){
-    listEl.innerHTML = `
-      <div class="empty-state">
-        <div class="glyph">◎</div>
-        <h3>Belum ada target</h3>
-        <p>Ketuk tombol + untuk mulai mencatat target<br>atau wishlist pertamamu.</p>
-      </div>`;
+  archiveToggleBtn.textContent = viewArchive ? 'Kembali ke aktif' : `Archive (${archived.length})`;
+  archiveToggleBtn.classList.toggle('active', viewArchive);
+
+  // filter pool: aktif vs archive
+  let pool = viewArchive ? items.filter(i => i.completed) : items.filter(i => !i.completed);
+
+  // sort
+  if(currentSort === 'nearest'){
+    pool = pool.slice().sort((a,b) => new Date(a.target) - new Date(b.target));
+  } else if(currentSort === 'newest'){
+    pool = pool.slice().sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  } else if(currentSort === 'oldest'){
+    pool = pool.slice().sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+  }
+
+  if(pool.length === 0){
+    if(viewArchive){
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <div class="glyph">🗂</div>
+          <h3>Belum ada yang diarsipkan</h3>
+          <p>Target yang kamu tandai selesai<br>akan muncul di sini.</p>
+        </div>`;
+    } else if(items.length === 0){
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <div class="glyph">◎</div>
+          <h3>Belum ada target</h3>
+          <p>Ketuk tombol + untuk mulai mencatat target<br>atau wishlist pertamamu.</p>
+        </div>`;
+    } else {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <div class="glyph">🔍</div>
+          <h3>Tidak ada hasil</h3>
+          <p>Tidak ada target dengan filter kategori ini.</p>
+        </div>`;
+    }
     return;
   }
 
-  listEl.innerHTML = items.map(item => {
+  listEl.innerHTML = pool.map(item => {
     const target = new Date(item.target+'T00:00:00');
     const now = todayStr();
     const daysLeft = daysBetween(now, target);
@@ -480,6 +603,8 @@ function render(){
       statusBadge = `<span class="badge-status" style="background:rgba(255,92,114,0.12); color:var(--crimson); border:1px solid rgba(255,92,114,0.3);">Tercapai</span>`;
     }
 
+    const monthsHint = (!item.completed && daysLeft > 0) ? formatMonthsHint(daysLeft) : null;
+
     return `
       <div class="card ${item.completed ? 'done' : ''}" data-id="${item.id}">
         ${statusBadge}
@@ -491,6 +616,7 @@ function render(){
           <div class="countdown">
             <div class="days" style="color:${color}">${dayText}</div>
             <div class="days-lbl">${dayLabel}</div>
+            ${monthsHint ? `<div class="days-sub">${monthsHint}</div>` : ''}
           </div>
         </div>
 
@@ -507,7 +633,7 @@ function render(){
         <div class="card-footer">
           <span class="target-date">🎯 ${fmtDate(item.target)}</span>
           <div class="card-actions">
-            <button class="icon-btn" data-action="toggle">${item.completed ? 'Buka lagi' : 'Tandai selesai'}</button>
+            <button class="icon-btn" data-action="toggle">${item.completed ? 'Buka lagi' : 'Arsipkan'}</button>
             <button class="icon-btn" data-action="edit">Edit</button>
             <button class="icon-btn danger" data-action="delete">Hapus</button>
           </div>
@@ -539,7 +665,7 @@ listEl.addEventListener('click', (e) => {
   } else if(btn.dataset.action === 'toggle'){
     item.completed = !item.completed;
     render();
-    showToast(item.completed ? 'Mantap, ditandai selesai 🎉' : 'Ditandai aktif lagi');
+    showToast(item.completed ? 'Dipindahkan ke archive 🎉' : 'Dikembalikan ke aktif');
   } else if(btn.dataset.action === 'edit'){
     openSheet(item);
   }
