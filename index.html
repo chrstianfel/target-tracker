@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Personal Target Tracker</title>
+
+<!-- iOS PWA support -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Target">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+
+<style>
+  :root{
+    --bg:#FFFFFF;
+    --bg-elev:#FFFFFF;
+    --bg-elev2:#F5F5F7;
+    --line:#E5E5EA;
+    --text:#1C1C1E;
+    --text-dim:#8E8E93;
+    --mint:#34C759;
+    --ember:#FF9500;
+    --crimson:#FF3B30;
+    --gold:#C9971C;
+    --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: 'SF Mono', 'Menlo', monospace;
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--font-body); -webkit-font-smoothing:antialiased;}
+  body{
+    min-height:100vh;
+    padding-bottom:calc(96px + env(safe-area-inset-bottom));
+    padding-top:env(safe-area-inset-top);
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    padding:28px 20px 18px;
+    position:relative;
+    overflow:hidden;
+  }
+  header::before{
+    content:"";
+    position:absolute; inset:0;
+    background:
+      radial-gradient(circle at 85% -10%, rgba(124,240,161,0.12), transparent 55%),
+      radial-gradient(circle at 0% 0%, rgba(255,138,76,0.08), transparent 50%);
+    pointer-events:none;
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.18em;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    margin:0 0 6px;
+  }
+  h1{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:34px;
+    margin:0;
+    letter-spacing:-0.01em;
+  }
+  .summary-row{
+    display:flex; gap:10px;
+    margin-top:18px;
+    overflow-x:auto;
+    padding-bottom:4px;
+    scrollbar-width:none;
+  }
+  .summary-row::-webkit-scrollbar{display:none;}
+  .stat-pill{
+    flex:0 0 auto;
+    background:var(--bg-elev);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:10px 14px;
+    min-width:84px;
+  }
+  .stat-pill .num{font-family:var(--font-mono); font-size:20px; font-weight:600; color:var(--mint);}
+  .stat-pill .lbl{font-size:11px; color:var(--text-dim); margin-top:2px;}
+
+  /* ---------- List ---------- */
+  main{padding:6px 16px 20px;}
+  .empty-state{
+    text-align:center;
+    padding:70px 24px;
+    color:var(--text-dim);
+  }
+  .empty-state .glyph{font-size:38px; margin-bottom:14px; opacity:0.6;}
+  .empty-state h3{font-family:var(--font-display); color:var(--text); font-weight:600; font-size:20px; margin:0 0 6px;}
+  .empty-state p{font-size:14px; line-height:1.5; margin:0;}
+
+  .card{
+    background:var(--bg-elev);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:18px;
+    margin-bottom:12px;
+    position:relative;
+    box-shadow:0 1px 3px rgba(0,0,0,0.04);
+    transition:transform .15s ease, border-color .15s ease;
+  }
+  .card.done{opacity:0.55;}
+  .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
+  .card-title{font-family:var(--font-display); font-size:18px; font-weight:600; line-height:1.3; margin:0;}
+  .card-cat{
+    display:inline-block;
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    background:var(--bg-elev2);
+    border:1px solid var(--line);
+    padding:3px 8px;
+    border-radius:8px;
+    margin-bottom:8px;
+  }
+  .countdown{
+    text-align:right;
+    flex:0 0 auto;
+  }
+  .countdown .days{
+    font-family:var(--font-mono);
+    font-size:26px;
+    font-weight:700;
+    line-height:1;
+  }
+  .countdown .days-lbl{
+    font-size:10px;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    margin-top:3px;
+  }
+
+  .progress-wrap{margin-top:14px;}
+  .progress-track{
+    height:8px;
+    background:var(--bg-elev2);
+    border-radius:99px;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .progress-fill{
+    height:100%;
+    border-radius:99px;
+    transition:width .4s ease;
+  }
+  .progress-meta{
+    display:flex; justify-content:space-between;
+    margin-top:7px;
+    font-size:11.5px;
+    color:var(--text-dim);
+    font-family:var(--font-mono);
+  }
+
+  .card-footer{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-top:14px;
+  }
+  .target-date{font-size:12px; color:var(--text-dim);}
+  .card-actions{display:flex; gap:8px;}
+  .icon-btn{
+    background:none; border:none; color:var(--text-dim);
+    font-size:13px; padding:6px 10px; border-radius:8px;
+    cursor:pointer;
+  }
+  .icon-btn:active{background:var(--bg-elev2);}
+  .icon-btn.danger{color:var(--crimson);}
+
+  .badge-status{
+    position:absolute; top:14px; right:14px;
+    font-family:var(--font-mono); font-size:10px; letter-spacing:0.05em;
+    padding:3px 8px; border-radius:7px; text-transform:uppercase;
+  }
+
+  /* ---------- FAB ---------- */
+  .fab{
+    position:fixed;
+    right:20px;
+    bottom:calc(24px + env(safe-area-inset-bottom));
+    width:58px; height:58px;
+    border-radius:50%;
+    background:var(--mint);
+    color:#0B0D10;
+    border:none;
+    font-size:28px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 8px 24px rgba(124,240,161,0.35);
+    cursor:pointer;
+    z-index:50;
+  }
+  .fab:active{transform:scale(0.92);}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.55);
+    backdrop-filter:blur(2px);
+    z-index:100;
+    display:none;
+    align-items:flex-end;
+  }
+  .overlay.open{display:flex;}
+  .sheet{
+    background:var(--bg-elev);
+    width:100%;
+    border-radius:24px 24px 0 0;
+    padding:22px 20px calc(24px + env(safe-area-inset-bottom));
+    border:1px solid var(--line);
+    border-bottom:none;
+    max-height:86vh;
+    overflow-y:auto;
+  }
+  .sheet h2{
+    font-family:var(--font-display); font-size:22px; margin:0 0 18px;
+  }
+  .field{margin-bottom:16px;}
+  .field label{
+    display:block; font-size:12px; color:var(--text-dim);
+    text-transform:uppercase; letter-spacing:0.06em;
+    margin-bottom:7px; font-family:var(--font-mono);
+  }
+  .field input, .field select{
+    width:100%;
+    background:var(--bg-elev2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:13px 14px;
+    border-radius:12px;
+    font-size:16px;
+    font-family:var(--font-body);
+  }
+  .field input:focus, .field select:focus{outline:1px solid var(--mint);}
+  .progress-mode{
+    display:flex; gap:8px; margin-bottom:14px;
+  }
+  .mode-btn{
+    flex:1;
+    background:var(--bg-elev2);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    padding:10px; border-radius:10px;
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  .mode-btn.active{
+    border-color:var(--mint); color:var(--mint); background:rgba(124,240,161,0.08);
+  }
+  .manual-progress-row{display:flex; align-items:center; gap:12px;}
+  .manual-progress-row input[type=range]{flex:1;}
+  .manual-progress-row .val{font-family:var(--font-mono); font-size:14px; min-width:42px; text-align:right;}
+
+  .sheet-actions{display:flex; gap:10px; margin-top:6px;}
+  .btn{
+    flex:1; padding:14px; border-radius:14px; border:none;
+    font-size:15px; font-weight:600; cursor:pointer;
+  }
+  .btn-primary{background:var(--mint); color:#0B0D10;}
+  .btn-ghost{background:var(--bg-elev2); color:var(--text); border:1px solid var(--line);}
+
+  .toast{
+    position:fixed; left:50%; bottom:calc(100px + env(safe-area-inset-bottom));
+    transform:translateX(-50%);
+    background:var(--bg-elev2);
+    border:1px solid var(--line);
+    padding:12px 18px;
+    border-radius:12px;
+    font-size:13.5px;
+    z-index:200;
+    opacity:0;
+    transition:opacity .25s ease, transform .25s ease;
+    pointer-events:none;
+    white-space:nowrap;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px);}
+
+  .notif-banner{
+    margin:0 16px 14px;
+    background:rgba(244,201,93,0.08);
+    border:1px solid rgba(244,201,93,0.35);
+    border-radius:14px;
+    padding:13px 14px;
+    font-size:13px;
+    color:var(--gold);
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+  }
+  .notif-banner button{
+    background:var(--gold); color:#0B0D10; border:none;
+    padding:8px 12px; border-radius:9px; font-size:12.5px; font-weight:600;
+    cursor:pointer; flex:0 0 auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Hari ini · <span id="todayLabel"></span></p>
+  <h1>Personal Target Tracker</h1>
+  <div class="summary-row" id="summaryRow"></div>
+</header>
+
+<div id="notifBanner"></div>
+
+<main>
+  <div id="list"></div>
+</main>
+
+<button class="fab" id="addBtn" aria-label="Tambah target">＋</button>
+
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <h2 id="sheetTitle">Target baru</h2>
+
+    <div class="field">
+      <label>Nama target / wishlist</label>
+      <input type="text" id="f_title" placeholder="cth. Lari marathon pertama">
+    </div>
+
+    <div class="field">
+      <label>Kategori</label>
+      <select id="f_cat">
+        <option value="Karier">Karier</option>
+        <option value="Keuangan">Keuangan</option>
+        <option value="Kesehatan">Kesehatan</option>
+        <option value="Belajar">Belajar</option>
+        <option value="Personal">Personal</option>
+        <option value="Lainnya">Lainnya</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Tanggal mulai (opsional)</label>
+      <input type="date" id="f_start">
+    </div>
+
+    <div class="field">
+      <label>Tanggal target</label>
+      <input type="date" id="f_target">
+    </div>
+
+    <label style="display:block; font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:9px; font-family:var(--font-mono);">Progress dihitung dari</label>
+    <div class="progress-mode">
+      <button class="mode-btn active" data-mode="time" id="modeTimeBtn">Waktu berjalan</button>
+      <button class="mode-btn" data-mode="manual" id="modeManualBtn">Saya set manual</button>
+    </div>
+
+    <div class="field" id="manualWrap" style="display:none;">
+      <label>Progress saat ini</label>
+      <div class="manual-progress-row">
+        <input type="range" id="f_manual" min="0" max="100" value="0">
+        <span class="val" id="manualVal">0%</span>
+      </div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" id="cancelBtn">Batal</button>
+      <button class="btn btn-primary" id="saveBtn">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== STORAGE ===================== */
+const STORE_KEY = 'targetTracker.items.v1';
+const NOTIF_FLAG_KEY = 'targetTracker.notifDismissed';
+
+function loadItems(){
+  try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
+  catch(e){ return []; }
+}
+function saveItems(items){
+  localStorage.setItem(STORE_KEY, JSON.stringify(items));
+}
+let items = loadItems();
+
+/* ===================== UTIL ===================== */
+function todayStr(){
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  return d;
+}
+function daysBetween(a,b){
+  const MS = 86400000;
+  return Math.round((b - a) / MS);
+}
+function fmtDate(iso){
+  if(!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
+}
+function uid(){ return 't_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
+
+function computeProgress(item){
+  if(item.mode === 'manual'){
+    return Math.max(0, Math.min(100, item.manualProgress||0));
+  }
+  const start = item.start ? new Date(item.start+'T00:00:00') : null;
+  const target = new Date(item.target+'T00:00:00');
+  const now = todayStr();
+  if(!start) return now >= target ? 100 : 0;
+  const total = daysBetween(start, target);
+  if(total <= 0) return 100;
+  const elapsed = daysBetween(start, now);
+  return Math.max(0, Math.min(100, Math.round((elapsed/total)*100)));
+}
+
+function progressColor(pct, daysLeft){
+  if(daysLeft < 0) return 'var(--text-dim)';
+  if(pct >= 100) return 'var(--mint)';
+  if(daysLeft <= 3) return 'var(--crimson)';
+  if(daysLeft <= 14) return 'var(--ember)';
+  return 'var(--mint)';
+}
+
+/* ===================== RENDER ===================== */
+const listEl = document.getElementById('list');
+const summaryRow = document.getElementById('summaryRow');
+const todayLabel = document.getElementById('todayLabel');
+
+todayLabel.textContent = new Date().toLocaleDateString('id-ID', {weekday:'long', day:'numeric', month:'long'});
+
+function render(){
+  items.sort((a,b) => new Date(a.target) - new Date(b.target));
+  saveItems(items);
+
+  // summary
+  const active = items.filter(i => !i.completed);
+  const reached = items.filter(i => {
+    const d = daysBetween(todayStr(), new Date(i.target+'T00:00:00'));
+    return d <= 0 && !i.completed;
+  });
+  const done = items.filter(i => i.completed);
+  summaryRow.innerHTML = `
+    <div class="stat-pill"><div class="num">${active.length}</div><div class="lbl">Aktif</div></div>
+    <div class="stat-pill"><div class="num">${reached.length}</div><div class="lbl">Tercapai H</div></div>
+    <div class="stat-pill"><div class="num">${done.length}</div><div class="lbl">Selesai</div></div>
+  `;
+
+  if(items.length === 0){
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <div class="glyph">◎</div>
+        <h3>Belum ada target</h3>
+        <p>Ketuk tombol + untuk mulai mencatat target<br>atau wishlist pertamamu.</p>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = items.map(item => {
+    const target = new Date(item.target+'T00:00:00');
+    const now = todayStr();
+    const daysLeft = daysBetween(now, target);
+    const pct = computeProgress(item);
+    const color = item.completed ? 'var(--text-dim)' : progressColor(pct, daysLeft);
+
+    let dayLabel, dayText;
+    if(item.completed){
+      dayLabel = 'selesai'; dayText = '✓';
+    } else if(daysLeft > 0){
+      dayLabel = 'hari lagi'; dayText = daysLeft;
+    } else if(daysLeft === 0){
+      dayLabel = 'hari ini'; dayText = 'H';
+    } else {
+      dayLabel = 'hari lewat'; dayText = Math.abs(daysLeft);
+    }
+
+    let statusBadge = '';
+    if(!item.completed && daysLeft <= 0){
+      statusBadge = `<span class="badge-status" style="background:rgba(255,92,114,0.12); color:var(--crimson); border:1px solid rgba(255,92,114,0.3);">Tercapai</span>`;
+    }
+
+    return `
+      <div class="card ${item.completed ? 'done' : ''}" data-id="${item.id}">
+        ${statusBadge}
+        <div class="card-top">
+          <div>
+            <span class="card-cat">${item.cat}</span>
+            <p class="card-title">${escapeHtml(item.title)}</p>
+          </div>
+          <div class="countdown">
+            <div class="days" style="color:${color}">${dayText}</div>
+            <div class="days-lbl">${dayLabel}</div>
+          </div>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="progress-track">
+            <div class="progress-fill" style="width:${pct}%; background:${color};"></div>
+          </div>
+          <div class="progress-meta">
+            <span>${pct}% tercapai</span>
+            <span>${item.mode === 'manual' ? 'manual' : 'otomatis'}</span>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <span class="target-date">🎯 ${fmtDate(item.target)}</span>
+          <div class="card-actions">
+            <button class="icon-btn" data-action="toggle">${item.completed ? 'Buka lagi' : 'Tandai selesai'}</button>
+            <button class="icon-btn" data-action="edit">Edit</button>
+            <button class="icon-btn danger" data-action="delete">Hapus</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ===================== CARD ACTIONS ===================== */
+listEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if(!btn) return;
+  const card = e.target.closest('.card');
+  const id = card.dataset.id;
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+
+  if(btn.dataset.action === 'delete'){
+    if(confirm(`Hapus "${item.title}"?`)){
+      items = items.filter(i => i.id !== id);
+      render();
+      showToast('Target dihapus');
+    }
+  } else if(btn.dataset.action === 'toggle'){
+    item.completed = !item.completed;
+    render();
+    showToast(item.completed ? 'Mantap, ditandai selesai 🎉' : 'Ditandai aktif lagi');
+  } else if(btn.dataset.action === 'edit'){
+    openSheet(item);
+  }
+});
+
+/* ===================== SHEET / FORM ===================== */
+const overlay = document.getElementById('overlay');
+const addBtn = document.getElementById('addBtn');
+const cancelBtn = document.getElementById('cancelBtn');
+const saveBtn = document.getElementById('saveBtn');
+const sheetTitle = document.getElementById('sheetTitle');
+
+const f_title = document.getElementById('f_title');
+const f_cat = document.getElementById('f_cat');
+const f_start = document.getElementById('f_start');
+const f_target = document.getElementById('f_target');
+const f_manual = document.getElementById('f_manual');
+const manualVal = document.getElementById('manualVal');
+const manualWrap = document.getElementById('manualWrap');
+const modeTimeBtn = document.getElementById('modeTimeBtn');
+const modeManualBtn = document.getElementById('modeManualBtn');
+
+let editingId = null;
+let currentMode = 'time';
+
+function openSheet(item){
+  editingId = item ? item.id : null;
+  sheetTitle.textContent = item ? 'Edit target' : 'Target baru';
+  f_title.value = item ? item.title : '';
+  f_cat.value = item ? item.cat : 'Personal';
+  f_start.value = item ? (item.start||'') : '';
+  f_target.value = item ? item.target : '';
+  currentMode = item ? item.mode : 'time';
+  f_manual.value = item ? (item.manualProgress||0) : 0;
+  manualVal.textContent = f_manual.value + '%';
+  setMode(currentMode);
+  overlay.classList.add('open');
+}
+function closeSheet(){
+  overlay.classList.remove('open');
+  editingId = null;
+}
+function setMode(mode){
+  currentMode = mode;
+  modeTimeBtn.classList.toggle('active', mode === 'time');
+  modeManualBtn.classList.toggle('active', mode === 'manual');
+  manualWrap.style.display = mode === 'manual' ? 'block' : 'none';
+}
+
+addBtn.addEventListener('click', () => openSheet(null));
+cancelBtn.addEventListener('click', closeSheet);
+overlay.addEventListener('click', (e) => { if(e.target === overlay) closeSheet(); });
+modeTimeBtn.addEventListener('click', () => setMode('time'));
+modeManualBtn.addEventListener('click', () => setMode('manual'));
+f_manual.addEventListener('input', () => manualVal.textContent = f_manual.value + '%');
+
+saveBtn.addEventListener('click', () => {
+  const title = f_title.value.trim();
+  const target = f_target.value;
+  if(!title){ showToast('Nama target belum diisi'); return; }
+  if(!target){ showToast('Tanggal target belum diisi'); return; }
+
+  if(editingId){
+    const item = items.find(i => i.id === editingId);
+    item.title = title;
+    item.cat = f_cat.value;
+    item.start = f_start.value || null;
+    item.target = target;
+    item.mode = currentMode;
+    item.manualProgress = parseInt(f_manual.value,10);
+    item.notifiedReached = (item.notifiedReached && new Date(target+'T00:00:00') >= todayStr());
+  } else {
+    items.push({
+      id: uid(),
+      title, cat: f_cat.value,
+      start: f_start.value || null,
+      target,
+      mode: currentMode,
+      manualProgress: parseInt(f_manual.value,10),
+      completed: false,
+      notifiedReached: false,
+      createdAt: new Date().toISOString()
+    });
+  }
+  render();
+  closeSheet();
+  showToast('Target tersimpan');
+});
+
+/* ===================== TOAST ===================== */
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ===================== NOTIFICATIONS ===================== */
+const notifBanner = document.getElementById('notifBanner');
+
+function renderNotifBanner(){
+  if(!('Notification' in window)){ notifBanner.innerHTML=''; return; }
+  if(Notification.permission === 'granted' || localStorage.getItem(NOTIF_FLAG_KEY)){
+    notifBanner.innerHTML = '';
+    return;
+  }
+  notifBanner.innerHTML = `
+    <div class="notif-banner">
+      <span>Aktifkan notifikasi supaya kamu diberi tahu saat tanggal target tiba.</span>
+      <button id="enableNotifBtn">Aktifkan</button>
+    </div>`;
+  document.getElementById('enableNotifBtn').addEventListener('click', async () => {
+    try{
+      const perm = await Notification.requestPermission();
+      if(perm !== 'granted'){
+        localStorage.setItem(NOTIF_FLAG_KEY, '1');
+      }
+    }catch(e){}
+    renderNotifBanner();
+    checkReachedTargets();
+  });
+}
+
+function notify(title, body){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  if(navigator.serviceWorker && navigator.serviceWorker.controller){
+    navigator.serviceWorker.controller.postMessage({
+      type:'SHOW_NOTIF',
+      title,
+      options:{ body, icon:'icons/icon-192.png', badge:'icons/icon-192.png' }
+    });
+  } else {
+    new Notification(title, { body, icon:'icons/icon-192.png' });
+  }
+}
+
+function checkReachedTargets(){
+  const now = todayStr();
+  let changed = false;
+  items.forEach(item => {
+    if(item.completed || item.notifiedReached) return;
+    const target = new Date(item.target+'T00:00:00');
+    if(daysBetween(now, target) <= 0){
+      notify('🎯 Target tercapai!', `Hari ini adalah tanggal target untuk "${item.title}".`);
+      item.notifiedReached = true;
+      changed = true;
+    }
+  });
+  if(changed){ saveItems(items); render(); }
+}
+
+/* ===================== SERVICE WORKER ===================== */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+
+/* ===================== INIT ===================== */
+render();
+renderNotifBanner();
+checkReachedTargets();
+
+// Re-check setiap kali app dibuka/diresume + tiap jam saat dibuka
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible'){
+    render();
+    checkReachedTargets();
+  }
+});
+setInterval(() => { render(); checkReachedTargets(); }, 1000*60*60);
+</script>
+
+</body>
+</html>
